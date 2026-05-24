@@ -10,9 +10,11 @@ import ai.openclaw.app.gateway.DeviceIdentityStore
 import ai.openclaw.app.gateway.GatewayDiscovery
 import ai.openclaw.app.gateway.GatewayEndpoint
 import ai.openclaw.app.gateway.GatewaySession
+import ai.openclaw.app.gateway.GatewaySessionManager
 import ai.openclaw.app.gateway.GatewayTlsProbeFailure
 import ai.openclaw.app.gateway.GatewayTlsProbeResult
 import ai.openclaw.app.gateway.GatewayUpdateAvailableSummary
+import ai.openclaw.app.gateway.RuntimeEvent
 import ai.openclaw.app.gateway.normalizeGatewayTlsFingerprint
 import ai.openclaw.app.gateway.probeGatewayTlsFingerprint
 import ai.openclaw.app.node.A2UIHandler
@@ -87,6 +89,7 @@ class NodeRuntime(
   private val appContext = context.applicationContext
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val deviceAuthStore = DeviceAuthStore(prefs)
+  val sessionManager = GatewaySessionManager(prefs)
   val canvas = CanvasController()
   val camera = CameraCaptureManager(appContext)
   val location = LocationCaptureManager(appContext)
@@ -387,6 +390,8 @@ class NodeRuntime(
       onConnected = { hello ->
         operatorConnected = true
         operatorStatusText = "Connected"
+        sessionManager.updateConnectionState(true, "Connected", hello.serverName, hello.remoteAddress)
+        sessionManager.dispatchEvent(RuntimeEvent.GatewayConnected(hello.serverName, hello.remoteAddress))
         _serverName.value = hello.serverName
         _remoteAddress.value = hello.remoteAddress
         _gatewayVersion.value = hello.serverVersion
@@ -405,6 +410,8 @@ class NodeRuntime(
       onDisconnected = { message ->
         operatorConnected = false
         operatorStatusText = message
+        sessionManager.updateConnectionState(false, message, null, null)
+        sessionManager.dispatchEvent(RuntimeEvent.GatewayDisconnected(message))
         _serverName.value = null
         _remoteAddress.value = null
         _gatewayVersion.value = null

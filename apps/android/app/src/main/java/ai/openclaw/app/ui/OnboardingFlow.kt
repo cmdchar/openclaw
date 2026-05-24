@@ -885,7 +885,7 @@ private fun recoveryGatewayDetail(
     ?: if (ready) {
       "Ready for chat and voice"
     } else if (statusText.contains("operator offline", ignoreCase = true)) {
-      "Gateway paired. Waiting for operator access."
+      "Gateway paired."
     } else if (gatewayStatusLooksLikePairing(statusText)) {
       "Gateway approval is in progress. OpenClaw will retry automatically."
     } else {

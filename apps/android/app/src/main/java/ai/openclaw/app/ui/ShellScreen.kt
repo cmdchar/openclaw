@@ -10,9 +10,7 @@ import ai.openclaw.app.MainViewModel
 import ai.openclaw.app.NodeRuntime
 import ai.openclaw.app.ui.chat.ChatScreen
 import ai.openclaw.app.ui.design.ClawDesignTheme
-import ai.openclaw.app.ui.design.ClawEmptyState
 import ai.openclaw.app.ui.design.ClawPanel
-import ai.openclaw.app.ui.design.ClawPrimaryButton
 import ai.openclaw.app.ui.design.ClawScaffold
 import ai.openclaw.app.ui.design.ClawTheme
 import androidx.activity.compose.BackHandler
@@ -24,12 +22,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,7 +41,9 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
@@ -70,20 +75,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private enum class Tab(
   val key: String,
   val label: String,
+  val icon: ImageVector,
 ) {
-  Overview(key = "overview", label = "Home"),
-  Chat(key = "chat", label = "Chat"),
-  Voice(key = "voice", label = "Voice"),
-  Sessions(key = "sessions", label = "Sessions"),
-  Settings(key = "settings", label = "Settings"),
-  ProvidersModels(key = "providers-models", label = "Providers"),
+  Chat(key = "chat", label = "Chat", icon = Icons.Outlined.ChatBubbleOutline),
+  Devices(key = "devices", label = "Devices", icon = Icons.Outlined.Inventory2),
+  Live(key = "live", label = "Live", icon = Icons.AutoMirrored.Filled.ScreenShare),
+  Tasks(key = "tasks", label = "Tasks", icon = Icons.Outlined.Settings),
+  Memory(key = "memory", label = "Memory", icon = Icons.Default.Storage),
+  Settings(key = "settings", label = "Settings", icon = Icons.Outlined.Settings),
+  Voice(key = "voice", label = "Voice", icon = Icons.Outlined.MicNone),
+  Sessions(key = "sessions", label = "Sessions", icon = Icons.Outlined.AccessTime),
+  ProvidersModels(key = "providers-models", label = "Providers", icon = Icons.Default.Storage),
 }
 
 @Composable
@@ -92,9 +100,9 @@ fun ShellScreen(
   modifier: Modifier = Modifier,
 ) {
   ClawDesignTheme {
-    var activeTab by rememberSaveable { mutableStateOf(Tab.Overview) }
+    var activeTab by rememberSaveable { mutableStateOf(Tab.Chat) }
     var settingsRoute by rememberSaveable { mutableStateOf(SettingsRoute.Home) }
-    var returnToOverviewFromSettings by rememberSaveable { mutableStateOf(false) }
+    var returnToChatFromSettings by rememberSaveable { mutableStateOf(false) }
     var commandOpen by rememberSaveable { mutableStateOf(false) }
     val requestedHomeDestination by viewModel.requestedHomeDestination.collectAsState()
     val pendingTrust by viewModel.pendingGatewayTrust.collectAsState()
@@ -103,15 +111,15 @@ fun ShellScreen(
       val destination = requestedHomeDestination ?: return@LaunchedEffect
       activeTab =
         when (destination) {
-          HomeDestination.Connect -> Tab.Overview
+          HomeDestination.Connect -> Tab.Chat
           HomeDestination.Chat -> Tab.Chat
           HomeDestination.Voice -> Tab.Voice
-          HomeDestination.Screen -> Tab.Chat
+          HomeDestination.Screen -> Tab.Live
           HomeDestination.Settings -> Tab.Settings
         }
       if (destination == HomeDestination.Settings) {
         settingsRoute = SettingsRoute.Home
-        returnToOverviewFromSettings = false
+        returnToChatFromSettings = false
       }
       viewModel.clearRequestedHomeDestination()
     }
@@ -120,110 +128,167 @@ fun ShellScreen(
       viewModel.setVoiceScreenActive(activeTab == Tab.Voice)
     }
 
-    BackHandler(enabled = activeTab != Tab.Overview) {
-      activeTab = Tab.Overview
+    BackHandler(enabled = activeTab != Tab.Chat) {
+      activeTab = Tab.Chat
     }
 
     BackHandler(enabled = commandOpen) {
       commandOpen = false
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-      when (activeTab) {
-        Tab.Overview ->
-          OverviewScreen(
-            viewModel = viewModel,
-            onSelectTab = { activeTab = it },
-            onOpenSettingsRoute = {
-              settingsRoute = it
-              returnToOverviewFromSettings = true
-              activeTab = Tab.Settings
-            },
-            onOpenCommand = { commandOpen = true },
-          )
-        Tab.Chat ->
-          ChatShellScreen(
-            viewModel = viewModel,
-            onBack = { activeTab = Tab.Overview },
-            onVoice = { activeTab = Tab.Voice },
-          )
-        Tab.Voice ->
-          VoiceShellScreen(
-            viewModel = viewModel,
-            onOpenCommand = { commandOpen = true },
-            onOpenVoiceSettings = {
-              settingsRoute = SettingsRoute.Voice
-              returnToOverviewFromSettings = false
-              activeTab = Tab.Settings
-            },
-          )
-        Tab.ProvidersModels ->
-          ProvidersModelsScreen(
-            viewModel = viewModel,
-            onBack = { activeTab = Tab.Overview },
-            onAddProvider = {
-              settingsRoute = SettingsRoute.Gateway
-              returnToOverviewFromSettings = false
-              activeTab = Tab.Settings
-            },
-          )
-        Tab.Sessions ->
-          SessionsScreen(
-            viewModel = viewModel,
-            onOpenCommand = { commandOpen = true },
-            onOpenChat = { activeTab = Tab.Chat },
-          )
-        Tab.Settings ->
-          SettingsShellScreen(
-            viewModel = viewModel,
-            route = settingsRoute,
-            onRouteChange = {
-              settingsRoute = it
-              returnToOverviewFromSettings = false
-            },
-            onRouteBack = {
-              settingsRoute = SettingsRoute.Home
-              if (returnToOverviewFromSettings) {
-                returnToOverviewFromSettings = false
-                activeTab = Tab.Overview
+    androidx.compose.material3.Scaffold(
+      modifier = modifier.fillMaxSize(),
+      containerColor = Color.Transparent,
+      contentWindowInsets =
+        androidx.compose.foundation.layout
+          .WindowInsets(0, 0, 0, 0),
+      bottomBar = {
+        val hideBottomBar = activeTab == Tab.Voice || activeTab == Tab.Sessions || activeTab == Tab.ProvidersModels
+        if (!hideBottomBar) {
+          val safeInsets =
+            androidx.compose.foundation.layout.WindowInsets.navigationBars
+              .only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal)
+          val mainTabs = listOf(Tab.Chat, Tab.Devices, Tab.Live, Tab.Tasks, Tab.Memory, Tab.Settings)
+          Box(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+              modifier = Modifier.fillMaxWidth(),
+              color = ClawTheme.colors.surfaceRaised,
+              shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+              border = BorderStroke(1.dp, ClawTheme.colors.border),
+              shadowElevation = 6.dp,
+            ) {
+              Row(
+                modifier =
+                  Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(safeInsets)
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                mainTabs.forEach { tab ->
+                  val active = tab == activeTab
+                  Surface(
+                    onClick = { activeTab = tab },
+                    modifier = Modifier.weight(1f).heightIn(min = 58.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (active) ClawTheme.colors.primary else Color.Transparent,
+                    shadowElevation = 0.dp,
+                  ) {
+                    Column(
+                      modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 7.dp),
+                      horizontalAlignment = Alignment.CenterHorizontally,
+                      verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                      Icon(
+                        imageVector = tab.icon,
+                        contentDescription = tab.label,
+                        tint = if (active) ClawTheme.colors.primaryText else ClawTheme.colors.textMuted,
+                      )
+                      Text(
+                        text = tab.label,
+                        color = if (active) ClawTheme.colors.primaryText else ClawTheme.colors.textMuted,
+                        style = ClawTheme.type.caption.copy(fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium),
+                      )
+                    }
+                  }
+                }
               }
-            },
-            onOpenCommand = { commandOpen = true },
-          )
-      }
+            }
+          }
+        }
+      },
+    ) { innerPadding ->
+      Box(modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
+        when (activeTab) {
+          Tab.Chat ->
+            ChatScreen(viewModel = viewModel, onBack = { activeTab = Tab.Chat }, onVoice = { activeTab = Tab.Voice })
+          Tab.Devices ->
+            DevicesScreen(viewModel = viewModel)
+          Tab.Live ->
+            LiveScreen(viewModel = viewModel)
+          Tab.Tasks ->
+            TasksScreen(viewModel = viewModel)
+          Tab.Memory ->
+            MemoryScreen(viewModel = viewModel)
+          Tab.Settings ->
+            SettingsShellScreen(
+              viewModel = viewModel,
+              route = settingsRoute,
+              onRouteChange = {
+                settingsRoute = it
+                returnToChatFromSettings = false
+              },
+              onRouteBack = {
+                settingsRoute = SettingsRoute.Home
+                if (returnToChatFromSettings) {
+                  returnToChatFromSettings = false
+                  activeTab = Tab.Chat
+                }
+              },
+              onOpenCommand = { commandOpen = true },
+            )
+          Tab.Voice ->
+            VoiceShellScreen(
+              viewModel = viewModel,
+              onOpenCommand = { commandOpen = true },
+              onOpenVoiceSettings = {
+                settingsRoute = SettingsRoute.Voice
+                returnToChatFromSettings = false
+                activeTab = Tab.Settings
+              },
+            )
+          Tab.ProvidersModels ->
+            ProvidersModelsScreen(
+              viewModel = viewModel,
+              onBack = { activeTab = Tab.Chat },
+              onAddProvider = {
+                settingsRoute = SettingsRoute.Gateway
+                returnToChatFromSettings = false
+                activeTab = Tab.Settings
+              },
+            )
+          Tab.Sessions ->
+            SessionsScreen(
+              viewModel = viewModel,
+              onOpenCommand = { commandOpen = true },
+              onOpenChat = { activeTab = Tab.Chat },
+            )
+        }
 
-      if (commandOpen) {
-        CommandPalette(
-          viewModel = viewModel,
-          onDismiss = { commandOpen = false },
-          onOpenChat = {
-            activeTab = Tab.Chat
-            commandOpen = false
-          },
-          onOpenVoice = {
-            activeTab = Tab.Voice
-            commandOpen = false
-          },
-          onOpenSessions = {
-            activeTab = Tab.Sessions
-            commandOpen = false
-          },
-          onOpenProviders = {
-            activeTab = Tab.ProvidersModels
-            commandOpen = false
-          },
-          onOpenSettings = {
-            settingsRoute = SettingsRoute.Home
-            returnToOverviewFromSettings = false
-            activeTab = Tab.Settings
-            commandOpen = false
-          },
-          onOpenSession = { sessionKey ->
-            viewModel.switchChatSession(sessionKey)
-            activeTab = Tab.Chat
-            commandOpen = false
-          },
-        )
+        if (commandOpen) {
+          CommandPalette(
+            viewModel = viewModel,
+            onDismiss = { commandOpen = false },
+            onOpenChat = {
+              activeTab = Tab.Chat
+              commandOpen = false
+            },
+            onOpenVoice = {
+              activeTab = Tab.Voice
+              commandOpen = false
+            },
+            onOpenSessions = {
+              activeTab = Tab.Sessions
+              commandOpen = false
+            },
+            onOpenProviders = {
+              activeTab = Tab.ProvidersModels
+              commandOpen = false
+            },
+            onOpenSettings = {
+              settingsRoute = SettingsRoute.Home
+              returnToChatFromSettings = false
+              activeTab = Tab.Settings
+              commandOpen = false
+            },
+            onOpenSession = { sessionKey ->
+              viewModel.switchChatSession(sessionKey)
+              activeTab = Tab.Chat
+              commandOpen = false
+            },
+          )
+        }
       }
 
       pendingTrust?.let { prompt ->
@@ -266,360 +331,6 @@ private fun GatewayTrustDialog(
       }
     },
   )
-}
-
-@Composable
-private fun OverviewScreen(
-  viewModel: MainViewModel,
-  onSelectTab: (Tab) -> Unit,
-  onOpenSettingsRoute: (SettingsRoute) -> Unit,
-  onOpenCommand: () -> Unit,
-) {
-  val isConnected by viewModel.isConnected.collectAsState()
-  val sessions by viewModel.chatSessions.collectAsState()
-  val pendingRunCount by viewModel.pendingRunCount.collectAsState()
-  val models by viewModel.modelCatalog.collectAsState()
-  val providers by viewModel.modelAuthProviders.collectAsState()
-  val agents by viewModel.gatewayAgents.collectAsState()
-  val pendingToolCalls by viewModel.chatPendingToolCalls.collectAsState()
-  val cronStatus by viewModel.cronStatus.collectAsState()
-  val usageSummary by viewModel.usageSummary.collectAsState()
-  val skillsSummary by viewModel.skillsSummary.collectAsState()
-  val nodesDevicesSummary by viewModel.nodesDevicesSummary.collectAsState()
-  val channelsSummary by viewModel.channelsSummary.collectAsState()
-  val readyProviderCount = providers.count { modelProviderReady(it.status) }
-
-  LaunchedEffect(isConnected) {
-    if (isConnected) {
-      viewModel.refreshChatSessions(limit = 20)
-      viewModel.refreshModelCatalog()
-      viewModel.refreshAgents()
-      viewModel.refreshCronJobs()
-      viewModel.refreshUsage()
-      viewModel.refreshSkills()
-      viewModel.refreshNodesDevices()
-      viewModel.refreshChannels()
-    }
-  }
-
-  ClawScaffold(contentPadding = PaddingValues(start = 20.dp, top = 14.dp, end = 20.dp, bottom = 20.dp)) {
-    Box(modifier = Modifier.fillMaxSize()) {
-      LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 82.dp)) {
-        item {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(9.dp),
-          ) {
-            Text(
-              text = "O P E N C L A W",
-              style = ClawTheme.type.title.copy(fontSize = 16.sp, lineHeight = 20.sp),
-              color = ClawTheme.colors.text,
-              modifier = Modifier.weight(1f),
-            )
-            PlainIconButton(icon = Icons.Default.Search, contentDescription = "Search", onClick = onOpenCommand)
-            OverviewAvatar(text = "OC")
-          }
-        }
-
-        item {
-          SectionLabel(title = "MODULES")
-        }
-
-        item {
-          ModuleList(
-            rows =
-              listOf(
-                ModuleRow("Chat", null, null, Icons.Outlined.ChatBubbleOutline, Tab.Chat),
-                ModuleRow("Sessions", null, if (sessions.isEmpty()) "Empty" else "${sessions.size} recent", Icons.Outlined.AccessTime, Tab.Sessions),
-                ModuleRow("Voice", null, if (isConnected) "Ready" else "Offline", Icons.Outlined.MicNone, Tab.Voice),
-                ModuleRow(
-                  title = "Providers & Models",
-                  subtitle = null,
-                  metadata =
-                    when {
-                      !isConnected -> "Offline"
-                      readyProviderCount > 0 -> "$readyProviderCount ready"
-                      models.isNotEmpty() -> "${models.size} models"
-                      else -> "Setup"
-                    },
-                  icon = Icons.Outlined.Inventory2,
-                  tab = Tab.ProvidersModels,
-                ),
-                ModuleRow("Channels", null, channelsSummaryText(channelsSummary), Icons.Default.Notifications, Tab.Settings, SettingsRoute.Channels),
-                ModuleRow("Agents", null, if (agents.isEmpty()) "Load" else "${agents.size} ready", Icons.Default.Person, Tab.Settings, SettingsRoute.Agents),
-                ModuleRow("Approvals", null, approvalsSummary(pendingToolCalls.size), Icons.Default.Lock, Tab.Settings, SettingsRoute.Approvals),
-                ModuleRow("Cron Jobs", null, cronJobsSummary(cronStatus.jobs), Icons.Outlined.AccessTime, Tab.Settings, SettingsRoute.CronJobs),
-                ModuleRow("Skills", null, skillsSummaryText(skillsSummary.skills), Icons.Default.Settings, Tab.Settings, SettingsRoute.Skills),
-                ModuleRow("Nodes & Devices", null, nodesDevicesSummaryText(nodesDevicesSummary), Icons.Default.Cloud, Tab.Settings, SettingsRoute.NodesDevices),
-                ModuleRow("Usage", null, usageSummaryText(usageSummary.providers.size), Icons.Default.Storage, Tab.Settings, SettingsRoute.Usage),
-                ModuleRow("Settings", null, null, Icons.Outlined.Settings, Tab.Settings, SettingsRoute.Home),
-              ),
-            onSelectTab = onSelectTab,
-            onOpenSettingsRoute = onOpenSettingsRoute,
-          )
-        }
-
-        item {
-          SectionLabel(
-            title = "Recent Sessions",
-            action = {
-              Text(
-                text = "View all",
-                modifier = Modifier.clickable { onSelectTab(Tab.Sessions) },
-                style = ClawTheme.type.caption,
-                color = ClawTheme.colors.textMuted,
-              )
-            },
-          )
-        }
-
-        if (sessions.isEmpty()) {
-          item {
-            ClawEmptyState(
-              title = "No recent sessions",
-              body = "Start a chat and your active OpenClaw conversations will appear here.",
-              action = { ClawPrimaryButton(text = "Start Chat", onClick = { onSelectTab(Tab.Chat) }) },
-            )
-          }
-        } else {
-          item {
-            RecentSessionList(
-              rows =
-                sessions.take(7).map { session ->
-                  RecentSessionListItem(
-                    key = session.key,
-                    title = displaySessionTitle(session.displayName),
-                    subtitle = if (pendingRunCount > 0) "Assistant working" else "OpenClaw session",
-                    metadata = session.updatedAtMs?.let(::relativeSessionTime) ?: "",
-                  )
-                },
-              onOpen = { sessionKey ->
-                viewModel.switchChatSession(sessionKey)
-                onSelectTab(Tab.Chat)
-              },
-            )
-          }
-        }
-      }
-      OverviewChatButton(onClick = { onSelectTab(Tab.Chat) }, modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 8.dp))
-    }
-  }
-}
-
-private data class ModuleRow(
-  val title: String,
-  val subtitle: String?,
-  val metadata: String?,
-  val icon: ImageVector,
-  val tab: Tab,
-  val settingsRoute: SettingsRoute? = null,
-)
-
-@Composable
-private fun OverviewChatButton(
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  Surface(
-    onClick = onClick,
-    modifier = modifier.height(ClawTheme.spacing.touchTarget),
-    shape = RoundedCornerShape(ClawTheme.radii.pill),
-    color = ClawTheme.colors.primary,
-    contentColor = ClawTheme.colors.primaryText,
-  ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 18.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
-      Icon(imageVector = Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-      Text(text = "Chat", style = ClawTheme.type.title.copy(fontSize = 17.sp, lineHeight = 22.sp))
-    }
-  }
-}
-
-@Composable
-private fun OverviewAvatar(text: String) {
-  Surface(
-    modifier = Modifier.size(34.dp),
-    shape = CircleShape,
-    color = ClawTheme.colors.surfaceRaised,
-    contentColor = ClawTheme.colors.text,
-    border = BorderStroke(1.dp, ClawTheme.colors.border),
-  ) {
-    Box(contentAlignment = Alignment.Center) {
-      Text(text = text.take(2).uppercase(), style = ClawTheme.type.label)
-    }
-  }
-}
-
-@Composable
-private fun SectionLabel(
-  title: String,
-  action: (@Composable () -> Unit)? = null,
-) {
-  Row(
-    modifier = Modifier.fillMaxWidth(),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.SpaceBetween,
-  ) {
-    Text(text = title.uppercase(), style = ClawTheme.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp), color = ClawTheme.colors.textMuted)
-    action?.invoke()
-  }
-}
-
-@Composable
-private fun ModuleList(
-  rows: List<ModuleRow>,
-  onSelectTab: (Tab) -> Unit,
-  onOpenSettingsRoute: (SettingsRoute) -> Unit,
-) {
-  ClawPanel(contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-      rows.forEachIndexed { index, row ->
-        ModuleListRow(
-          row = row,
-          onClick = {
-            val route = row.settingsRoute
-            if (route == null) {
-              onSelectTab(row.tab)
-            } else {
-              onOpenSettingsRoute(route)
-            }
-          },
-        )
-        if (index != rows.lastIndex) {
-          HorizontalDivider(color = ClawTheme.colors.border, thickness = 1.dp)
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun ModuleListRow(
-  row: ModuleRow,
-  onClick: () -> Unit,
-) {
-  Surface(color = Color.Transparent, contentColor = ClawTheme.colors.text) {
-    Row(
-      modifier =
-        Modifier
-          .fillMaxWidth()
-          .heightIn(min = 50.dp)
-          .clip(RoundedCornerShape(ClawTheme.radii.row))
-          .clickable(onClick = onClick)
-          .padding(horizontal = 2.dp, vertical = 5.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-      Icon(imageVector = row.icon, contentDescription = null, modifier = Modifier.size(19.dp), tint = ClawTheme.colors.text)
-      Text(
-        text = row.title,
-        style = ClawTheme.type.body,
-        color = ClawTheme.colors.text,
-        modifier = Modifier.weight(1f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      row.metadata?.let {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          Box(modifier = Modifier.size(4.5.dp).clip(CircleShape).background(statusDotColor(it)))
-          Text(text = it, style = ClawTheme.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp), color = ClawTheme.colors.textMuted, maxLines = 1)
-        }
-      }
-      Icon(
-        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-        contentDescription = "Open ${row.title}",
-        modifier = Modifier.size(17.dp),
-        tint = ClawTheme.colors.textMuted,
-      )
-    }
-  }
-}
-
-@Composable
-private fun RecentSessionRow(
-  title: String,
-  subtitle: String,
-  metadata: String,
-  onClick: () -> Unit,
-) {
-  RecentSessionRowContent(title = title, subtitle = subtitle, metadata = metadata, onClick = onClick)
-}
-
-private data class RecentSessionListItem(
-  val key: String,
-  val title: String,
-  val subtitle: String,
-  val metadata: String,
-)
-
-@Composable
-private fun RecentSessionList(
-  rows: List<RecentSessionListItem>,
-  onOpen: (String) -> Unit,
-) {
-  ClawPanel(contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-    Column {
-      rows.forEachIndexed { index, row ->
-        RecentSessionRowContent(
-          title = row.title,
-          subtitle = row.subtitle,
-          metadata = row.metadata,
-          onClick = { onOpen(row.key) },
-        )
-        if (index != rows.lastIndex) {
-          HorizontalDivider(color = ClawTheme.colors.border, thickness = 1.dp)
-        }
-      }
-    }
-  }
-}
-
-@Composable
-private fun RecentSessionRowContent(
-  title: String,
-  subtitle: String,
-  metadata: String,
-  onClick: () -> Unit,
-) {
-  Surface(color = ClawTheme.colors.canvas, contentColor = ClawTheme.colors.text) {
-    Row(
-      modifier =
-        Modifier
-          .fillMaxWidth()
-          .heightIn(min = 58.dp)
-          .clip(RoundedCornerShape(ClawTheme.radii.row))
-          .clickable(onClick = onClick)
-          .padding(horizontal = 2.dp, vertical = 6.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-      Surface(
-        modifier = Modifier.size(30.dp),
-        shape = CircleShape,
-        color = ClawTheme.colors.canvas,
-        border = BorderStroke(1.dp, ClawTheme.colors.borderStrong),
-      ) {
-        Box(contentAlignment = Alignment.Center) {
-          Icon(imageVector = Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(15.dp), tint = ClawTheme.colors.text)
-        }
-      }
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-        Text(text = title, style = ClawTheme.type.body, color = ClawTheme.colors.text, maxLines = 1)
-        Text(text = subtitle, style = ClawTheme.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp), color = ClawTheme.colors.textSubtle, maxLines = 1)
-      }
-      Text(text = metadata, style = ClawTheme.type.caption.copy(fontSize = 12.5.sp, lineHeight = 16.sp), color = ClawTheme.colors.textMuted)
-      Icon(
-        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-        contentDescription = "Open session",
-        modifier = Modifier.size(14.dp),
-        tint = ClawTheme.colors.textMuted,
-      )
-    }
-  }
 }
 
 @Composable

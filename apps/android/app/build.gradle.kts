@@ -129,6 +129,7 @@ android {
   }
 
   lint {
+    baseline = file("lint-baseline.xml")
     lintConfig = file("lint.xml")
     warningsAsErrors = true
   }
@@ -164,6 +165,7 @@ kotlin {
 }
 
 ktlint {
+  baseline = file("lint-baseline.xml")
   android.set(true)
   ignoreFailures.set(false)
   filter {
